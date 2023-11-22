@@ -1,0 +1,15 @@
+{
+    "azure": {
+      "cloud": "AzureCloud",
+      "subscription": "DevOps FTECH"
+    },
+    "application": {
+      "blueprintsDirectoryPath": "/Users/andre/Documents/gitlabff/blueprints",
+      "updateBlueprintsDirectoryPath": "/Users/andre/Documents/gitlabff/update-blueprints",
+      "targetKey": "maintainers",
+      "targetValue": "infrastructure-caching-admins",
+      "env": "dev",
+      "dc": "we1"
+    }
+  }
+  

@@ -1,0 +1,15 @@
+{
+    "azure": {
+      "cloud": "AzureCloud",
+      "subscription": "DevOps FTECH"
+    },
+    "application": {
+      "blueprintsDirectoryPath": "/Users/andre/Documents/go/bpcleaner/test_dir/another dir",
+      "updateBlueprintsDirectoryPath": "/Users/andre/Documents/go/bpcleaner/update-blueprints",
+      "targetKey": "maintainers",
+      "targetValue": "infrastructure-caching-admins",
+      "env": "dev",
+      "dc": "we1"
+    }
+  }
+  
