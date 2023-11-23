@@ -195,6 +195,8 @@ func checkBlueprints(fileNames []string, config *Config) {
 
 	if cleanup != "" {
 		fmt.Printf("\n\n#############################\n# Cleanup suggestions %s-%s\n# Blueprints\n#############################\n%s\n", config.Application.Dc, config.Application.Env, cleanup)
+	} else {
+		fmt.Printf("\n\n#############################\n# Everything looks clean\n# Blueprints\n#############################\n")
 	}
 
 }
@@ -299,6 +301,8 @@ func checkUpdateBlueprints(blueprintsFileNames []string, updateBlueprintsFileNam
 	}
 	if cleanup != "" {
 		fmt.Printf("\n\n#############################\n# Cleanup suggestions %s-%s\n# Update Blueprints\n#############################\n%s\n", config.Application.Dc, config.Application.Env, cleanup)
+	} else {
+		fmt.Printf("\n\n#############################\n# Everything looks clean\n# Update Blueprints\n#############################\n")
 	}
 }
 
