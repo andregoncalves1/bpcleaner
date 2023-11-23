@@ -428,6 +428,13 @@ func checkAzureVMExists(subscription, resourceGroup, vmName string) (bool, error
 
 // azureLoginIfNeeded logs in to Azure CLI if not already logged in
 func azureLoginIfNeeded(azureCloud string) error {
+	// Azure CLI set cloud
+	setCloudCmd := exec.Command("az", "cloud", "set", "--name", azureCloud)
+	setCloudOutput, setCloudErr := setCloudCmd.CombinedOutput()
+	if setCloudErr != nil {
+		return fmt.Errorf("error executing Azure CLI cloud set command: %v\nOutput: %s", setCloudErr, setCloudOutput)
+	}
+
 	// Check if Azure CLI is already logged in
 	cmd := exec.Command("az", "account", "show")
 	_, err := cmd.CombinedOutput()

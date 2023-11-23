@@ -1,0 +1,15 @@
+{
+    "azure": {
+      "cloud": "AzureCloud",
+      "subscription": "FFLIVE NE"
+    },
+    "application": {
+      "blueprintsDirectoryPath": "/Users/andre/Documents/gitlabff/blueprints",
+      "updateBlueprintsDirectoryPath": "/Users/andre/Documents/gitlabff/update-blueprints",
+      "targetKey": "maintainers",
+      "targetValue": "infrastructure-caching-admins",
+      "env": "prd",
+      "dc": "ne1"
+    }
+  }
+  

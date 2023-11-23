@@ -1,0 +1,34 @@
+version: 1
+platform: infrastructure
+boundary: haproxy
+name: waf-integrations
+description: update blueprint for haproxy servers
+maintainers:
+  - infrastructure-caching-admins
+project_type: patching
+pre_scripts:
+  salt-call: haproxy_management.off_rotation
+  run_after: true
+post_scripts:
+  salt-call: haproxy_management.on_rotation
+alerting:
+  slack:
+    info:
+      - '#caching-patching'
+    emergency:
+      - '#caching-patching-errors'
+environment_specific:
+  - environment: dev
+    datacenter: we1
+    update_classifications:
+      count: 1
+      type: all
+    virtual_machines:
+      - infrastructure_blueprint: infrastructure-haproxy-waf-integrations
+    scheduling:
+      settings: recurring
+      cron:
+         hour: '4-9/2'
+         day: '*'
+         month: '*'
+         dow: '4'

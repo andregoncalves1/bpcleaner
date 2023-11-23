@@ -1,0 +1,182 @@
+version: 1
+platform: infrastructure
+boundary: haproxy
+name: waf-integrations
+description: haproxies for integrations team and waf
+owner: rui.pereira@farfetch.com
+owner_dl: dl-all-ftech-integrations@farfetch.com
+technical_owner: nuno.veloso@farfetch.com
+technical_owner_dl: dl-all-ftech-infra-caching@farfetch.com
+maintainers:
+  - infrastructure-caching-admins
+  - infrastructure-platformsauto-haproxyautomation
+provider_maintainers:
+  - farfetch-infrastructure-caching-admins
+  - farfetch-infrastructure-webservers-we1-linux-grp-dev
+project_type: virtual_hardware
+tech_type: haproxy
+security:
+  context: standard
+telemetry:
+  alerting:
+    contacts:
+      email: dl-all-ftech-infra-caching@farfetch.com
+      slack: caching-alerts
+      pager: 2375f8e2659e4e4bba33692ad694e0c5
+    alerts:
+      # Host Alerts
+      - alertname: OSExporterUnreachable
+        expression: up{availability_set=~"(WE1|NE1|CN2)-(PRD|DEV|QA)-INFRASTRUCTURE-HAPROXY-WAF-INTEGRATIONS-WAF", job="node"} == 0
+        for: 5m
+        notify:
+          - environment: prd
+            routes: [slack]
+        description: '{{$labels.job}}_exporter on {{$labels.instance}} could not be scraped for over 5 minutes.'
+        troubleshooting: https://farfetch.atlassian.net/wiki/spaces/AlertsTroubleshooting/pages/607093940/
+      - alertname: LinuxDiskSpace
+        expression: (farfetch_linux_disk_free_percent{availability_set=~"(WE1|NE1|CN2)-(PRD|DEV|QA)-INFRASTRUCTURE-HAPROXY-WAF-INTEGRATIONS-WAF"} or farfetch_linux_disk_free_percent{availability_set=~"(WE1|NE1|CN2)-(PRD|DEV|QA)-INFRASTRUCTURE-HAPROXY-WAF-INTEGRATIONS-WAF", mountpoint!="/datadrive" }) < 10
+        for: 15m
+        notify:
+          - environment: prd
+            routes: [slack]
+        dashboard: host_linux
+        description: '{{$labels.instance}} has a disk space lower than 10% on {{$labels.mountpoint}}.'
+        troubleshooting: https://farfetch.atlassian.net/wiki/spaces/AlertsTroubleshooting/pages/607324149/
+      - alertname: LinuxDiskReadonly
+        expression: node_filesystem_readonly{availability_set=~"(WE1|NE1|CN2)-(PRD|DEV|QA)-INFRASTRUCTURE-HAPROXY-WAF-INTEGRATIONS-WAF", fstype!~"fuse.lxcfs|tmpfs|cifs"} != 0
+        for: 10m
+        notify:
+          - environment: prd
+            routes: [slack]
+        dashboard: host_linux
+        description: '{{$labels.instance}} has a readonly disk.'
+        troubleshooting: https://farfetch.atlassian.net/wiki/spaces/AlertsTroubleshooting/pages/607324149/
+      - alertname: LinuxDiskInodes
+        expression: farfetch_linux_disk_inodes_free_percent{availability_set=~"(WE1|NE1|CN2)-(PRD|DEV|QA)-INFRASTRUCTURE-HAPROXY-WAF-INTEGRATIONS-WAF", fstype!~"fuse.lxcfs|tmpfs|cifs"} < 10
+        for: 10m
+        notify:
+          - environment: prd
+            routes: [slack]
+        dashboard: host_linux
+        description: '{{$labels.instance}} has disk inodes low than 10% on {{$labels.mountpoint}}.'
+        troubleshooting: https://farfetch.atlassian.net/wiki/spaces/AlertsTroubleshooting/pages/607324149/
+      # HaProxy Alerts
+      - alertname: HAProxyServiceDown
+        expression: haproxy_up{availability_set=~"(WE1|NE1|CN2)-(PRD|DEV|QA)-INFRASTRUCTURE-HAPROXY-WAF-INTEGRATIONS-WAF"} == 0 or up{job="haproxy", availability_set=~"(WE1|NE1|CN2)-(PRD|DEV|QA)-INFRASTRUCTURE-HAPROXY-WAF-INTEGRATIONS-WAF"} == 0
+        for: 5m
+        notify:
+          - environment: prd
+            routes: [slack]
+        dashboard: haproxy_dashboard
+        description: '**SVC1 The HAProxy service in {{$labels.instance}} is down.'
+        troubleshooting: https://farfetch.atlassian.net/wiki/spaces/AlertsTroubleshooting/pages/669132906/HaproxyDown
+      - alertname: HAProxyServiceDownLiveByAS
+        expression: count(haproxy_up{availability_set=~"(WE1|NE1|CN2)-(PRD|DEV|QA)-INFRASTRUCTURE-HAPROXY-WAF-INTEGRATIONS-WAF"}==0 or up{job="haproxy", availability_set=~"(WE1|NE1|CN2)-(PRD|DEV|QA)-INFRASTRUCTURE-HAPROXY-WAF-INTEGRATIONS-WAF"} == 0) by (availability_set) / count(up{job="haproxy"}) by (availability_set) > 0.40
+        for: 5m
+        notify:
+          - environment: prd
+            routes: [slack, pager]
+        dashboard: haproxy_dashboard
+        description: '**SVC1 More than 40% of HAProxy servers in {{$labels.availability_set}} are down.'
+        troubleshooting: https://farfetch.atlassian.net/wiki/spaces/AlertsTroubleshooting/pages/669132906/HaproxyDown
+      - alertname: HaproxyClusterLinuxDiskSpace
+        expression: count(farfetch_linux_disk_free_percent{availability_set=~"(WE1|NE1|CN2)-(PRD|DEV|QA)-INFRASTRUCTURE-HAPROXY-WAF-INTEGRATIONS-WAF"} < 10) by (availability_set, mountpoint) / on (availability_set) group_left () count(up{job="haproxy"}) by (availability_set) > 0.40
+        for: 5m
+        notify:
+          - environment: prd
+            routes: [pager,slack]
+        dashboard: host_linux
+        description: 'Cluster {{$labels.availability_set}} has more than 40% of servers with disk space lower than 10% on {{$labels.mountpoint}}.'
+        troubleshooting: https://farfetch.atlassian.net/wiki/spaces/AlertsTroubleshooting/pages/607324149/
+      - alertname: SaltMinionServiceDownOnVM
+        expression: node_systemd_unit_state{availability_set=~"(WE1|NE1|CN2)-(PRD|DEV|QA)-INFRASTRUCTURE-HAPROXY-WAF-INTEGRATIONS-WAF", name="salt-minion.service", job="node", state="active"} == 0
+        for: 5m
+        notify:
+          - environment: prd
+            routes:
+              - slack
+        description: "{{$labels.name}} service on {{$labels.instance}} is reported missing for over 5 minute."
+        troubleshooting: https://farfetch.atlassian.net/wiki/spaces/CloudAutomation/pages/13059796858/Salt+Minion+Service+Down+on+VM
+      - alertname: HighstateDidNotRun
+        expression: (time() - highstate_last_run_timestamp{availability_set=~"(WE1|NE1|CN2)-(PRD|DEV|QA)-INFRASTRUCTURE-HAPROXY-WAF-INTEGRATIONS-WAF"})/60/60/24 > 3
+        for: 12h
+        notify:
+          - environment: prd
+            routes:
+              - slack
+        description: Highstate did NOT run on {{$labels.instance}} in the last 3 days
+        troubleshooting: https://farfetch.atlassian.net/wiki/spaces/CloudAutomation/pages/13060090740/HighState+Did+Not+Run
+      - alertname: MinionNotConnectedToMaster
+        expression: minion_reachable_from_master{minion_id=~"(?i)(we1|ne1|cn2)-(prd|dev)-infrastructure-haproxy-waf-[0-9]+.+"} == 0
+        for: 5m
+        notify:
+          - environment: prd
+            routes:
+              - slack
+        description: "{{$labels.minion_id}} is not connected to the {{$labels.instance}} master for over 5 minutes."
+        troubleshooting: https://farfetch.atlassian.net/wiki/spaces/CloudAutomation/pages/13071975942/A+minion+lost+connectivity+with+the+master
+      - alertname: CertificateAboutToExpire
+        expression: (max(certificate_expiry_timestamp{path=~".+", availability_set=~"(WE1|NE1|CN2)-(PRD|DEV|QA)-INFRASTRUCTURE-HAPROXY-WAF-INTEGRATIONS-WAF"}) by (instance, path, name) - time())/60/60/24 < 10 > 0
+        for: 5m
+        notify:
+          - environment: prd
+            routes:
+              - slack
+        description: "{{$labels.name}} in {{$labels.path}} will expire in less than 10 days in {{$labels.instance}}."
+        troubleshooting: https://farfetch.atlassian.net/wiki/spaces/PLATSERV/pages/3280899464/How+to+generate+a+certificate+pillar
+      - alertname: CertificateHasExpired
+        expression: (max(certificate_expiry_timestamp{path=~".+", availability_set=~"(WE1|NE1|CN2)-(PRD|DEV|QA)-INFRASTRUCTURE-HAPROXY-WAF-INTEGRATIONS-WAF"}) by (instance, path, name) - time())/60/60/24 <= 0
+        for: 5m
+        notify:
+          - environment: dev
+            routes:
+              - slack
+          - environment: prd
+            routes:
+              - slack
+              - pager
+        description: "{{$labels.name}} in {{$labels.path}} has expired in {{$labels.instance}}."
+        troubleshooting: https://farfetch.atlassian.net/wiki/spaces/PLATSERV/pages/3280899464/How+to+generate+a+certificate+pillar
+environment_specific:
+  - environment: dev
+    datacenter: we1
+    autoapproval_maintainers:
+      - tpspipelines-svc
+    virtual_machines:
+      - name: waf
+        count: 3
+        type: Standard_B2s
+        image:
+          publisher: FarfetchOS
+          offer: almalinux
+          sku: almalinux8global
+          version: 23.05221001.52
+        os: linux
+        os_disk:
+          type: Standard_LRS
+        roles:
+          - haproxy
+        networks:
+          - name: dmzwaf
+            loadbalancers:
+              - standard-PLB
+            accelerated: false
+    loadbalancers:
+      - name: standard-PLB
+        type: public
+        public_ip:
+          name: we1-dev-infrastructure-haproxy-waf-integrations-1-ip
+          resource_group: we1-dev-infrastructure-haproxy-waf-integrations
+        network:
+          name: dmzwaf
+        sku: basic
+        rules:
+          - protocol: tcp
+            frontend_port: 80
+            backend_port: 80
+          - protocol: tcp
+            frontend_port: 443
+            backend_port: 443
+          - protocol: tcp
+            frontend_port: 9027
+            backend_port: 9027
