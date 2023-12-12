@@ -38,6 +38,9 @@ environment_specific:
           - name: management
             loadbalancers:
               - we1-almahaproxy-ilb
+            address:
+              - 10.60.191.71
+              - 10.60.191.72
         roles:
           - haproxy
     loadbalancers:

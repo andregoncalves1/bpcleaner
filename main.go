@@ -109,6 +109,17 @@ func main() {
 		checkBlueprints(blueprintsFileNames, config)
 	}
 
+	if scope == "blueprints-ips" || scope == "all" {
+		// Get a list of YAML file names in the specified directory and its subdirectories
+		blueprintsFileNames, err := getAllYAMLFiles(config.Application.BlueprintsDirectoryPath)
+		if err != nil {
+			fmt.Printf("Error getting file names: %v\n", err)
+			return
+		}
+
+		checkBlueprintsIPs(blueprintsFileNames, config)
+	}
+
 }
 
 func checkBlueprints(fileNames []string, config *Config) {
@@ -194,9 +205,113 @@ func checkBlueprints(fileNames []string, config *Config) {
 	}
 
 	if cleanup != "" {
-		fmt.Printf("\n\n#############################\n# Cleanup suggestions %s-%s\n# Blueprints\n#############################\n%s\n", config.Application.Dc, config.Application.Env, cleanup)
+		fmt.Printf("\n\n#############################\n# Cleanup suggestions %s-%s\n# Blueprints\n#############################\n%s\n#############################\n", config.Application.Dc, config.Application.Env, cleanup)
 	} else {
 		fmt.Printf("\n\n#############################\n# Everything looks clean\n# Blueprints\n#############################\n")
+	}
+
+}
+
+func checkBlueprintsIPs(fileNames []string, config *Config) {
+	// Store cleanup guidance
+	var cleanup string
+	cleanup = ""
+
+	// Loop through each file and parse to YAML
+	for _, fileName := range fileNames {
+		// Read the content of the file
+		fileContent, err := ioutil.ReadFile(fileName)
+		if err != nil {
+			fmt.Printf("Error reading file %s: %v\n", fileName, err)
+			continue
+		}
+
+		// Parse the file content to a YAML variable
+		var yamlData map[string]interface{}
+		err = yaml.Unmarshal(fileContent, &yamlData)
+		if err != nil {
+			fmt.Printf("Error parsing file %s to YAML: %v\n", fileName, err)
+			continue
+		}
+
+		if listValue, ok := yamlData[config.Application.TargetKey]; ok {
+			// Check if the target value is in the list
+			if listContainsValue(listValue, config.Application.TargetValue) {
+				// Check if the key "environment_specific" exists
+				if environmentSpecific, ok := yamlData["environment_specific"]; ok {
+					// Check if it's a list
+					if environmentList, ok := environmentSpecific.([]interface{}); ok {
+						// Iterate over the elements in the list
+						for _, env := range environmentList {
+							// Check if it's a map
+							if envMap, ok := env.(map[interface{}]interface{}); ok {
+								// Check if the key "environment" exists and has the value "dev"
+								if envValue, ok := envMap["environment"]; ok && envValue == config.Application.Env {
+									// Check if the key "environment" exists and has the value "dev"
+									if envValue, ok := envMap["datacenter"]; ok && envValue == config.Application.Dc {
+										// Check if the key "virtual_machines" exists and is a list
+										if vmList, ok := envMap["virtual_machines"].([]interface{}); ok {
+											// Iterate over virtual machines
+											for _, vm := range vmList {
+												// Check if it's a map
+												if vmMap, ok := vm.(map[interface{}]interface{}); ok {
+													// Check if the key "name" exists
+													if vmName, ok := vmMap["name"]; ok {
+														// Iterate over VM networks
+														if vmNetworkList, ok := vmMap["networks"].([]interface{}); ok {
+															for _, vmNetwork := range vmNetworkList {
+																if vmNetworkMap, ok := vmNetwork.(map[interface{}]interface{}); ok {
+																	if vmAddresses, ok := vmNetworkMap["address"].([]interface{}); ok {
+																		//Check if number of IPs is the same as count
+																		if len(vmAddresses) == vmMap["count"] {
+																			fmt.Printf("Number of IP adresses and count match for %s-%s-%s-%s-%s\n", envMap["datacenter"].(string), envMap["environment"].(string), yamlData["platform"].(string), yamlData["boundary"].(string), vmMap["name"].(string))
+
+																			resourceGroup := constructResourceGroupName(envMap, yamlData)
+																			//Check each IP
+																			for i, vmIP := range vmAddresses {
+																				var fullVmName string
+																				if strings.EqualFold(vmMap["os"].(string), "windows") {
+																					fullVmName = fmt.Sprintf("%s-%d", vmMap["name"].(string), i+1)
+																				} else {
+																					fullVmName = constructVMName(envMap, yamlData, vmName.(string), i+1)
+																				}
+																				ipCheck, err := checkAzureVMIP(config.Azure.Subscription, resourceGroup, fullVmName, vmIP.(string))
+																				if err != nil {
+																					fmt.Printf("IP for vm %s could not be checked. Check for cleanup blueprint %s-%s-%s\n", fullVmName, yamlData["platform"].(string), yamlData["boundary"].(string), yamlData["name"].(string))
+																					cleanup += fmt.Sprintf("IP for vm %s could not be checked. Check for cleanup blueprint %s-%s-%s in file %s\n", fullVmName, yamlData["platform"].(string), yamlData["boundary"].(string), yamlData["name"].(string), fileName)
+																				} else if ipCheck {
+																					fmt.Printf("Virtual machine %s has correct IP in Blueprint.\n", fullVmName)
+																				} else {
+																					fmt.Printf("IP for vm %s does not match. Check for cleanup blueprint %s-%s-%s\n", fullVmName, yamlData["platform"].(string), yamlData["boundary"].(string), yamlData["name"].(string))
+																					cleanup += fmt.Sprintf("IP for vm %s does not match. Check for cleanup blueprint %s-%s-%s in file %s\n", fullVmName, yamlData["platform"].(string), yamlData["boundary"].(string), yamlData["name"].(string), fileName)
+																				}
+																			}
+																		} else {
+																			fmt.Printf("Number of IP adresses and count do not match for %s-%s-%s-%s-%s\n", envMap["datacenter"].(string), envMap["environment"].(string), yamlData["platform"].(string), yamlData["boundary"].(string), vmMap["name"].(string))
+																			cleanup += fmt.Sprintf("Number of IP adresses and count do not match for %s-%s-%s-%s-%s\n", envMap["datacenter"].(string), envMap["environment"].(string), yamlData["platform"].(string), yamlData["boundary"].(string), vmMap["name"].(string))
+																		}
+																	}
+																}
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if cleanup != "" {
+		fmt.Printf("\n\n#############################\n# Cleanup suggestions %s-%s\n# Blueprint IPs\n#############################\n%s\n#############################\n", config.Application.Dc, config.Application.Env, cleanup)
+	} else {
+		fmt.Printf("\n\n#############################\n# Everything looks clean\n# Blueprint Ips\n#############################\n")
 	}
 
 }
@@ -284,7 +399,7 @@ func checkUpdateBlueprints(blueprintsFileNames []string, updateBlueprintsFileNam
 															fmt.Printf("Update blueprint %s-%s-%s-%s-%s has a matching blueprint.\n", yamlData["platform"].(string), yamlData["boundary"].(string), yamlData["name"].(string), config.Application.Dc, config.Application.Env)
 														} else {
 															fmt.Printf("Update blueprint %s-%s-%s-%s-%s does not have a matching blueprint.\n", yamlData["platform"].(string), yamlData["boundary"].(string), yamlData["name"].(string), config.Application.Dc, config.Application.Env)
-															cleanup += fmt.Sprintf("Update blueprint %s-%s-%s-%s-%s does not have a matching blueprint.", yamlData["platform"].(string), yamlData["boundary"].(string), yamlData["name"].(string), config.Application.Dc, config.Application.Env)
+															cleanup += fmt.Sprintf("Update blueprint %s-%s-%s-%s-%s does not have a matching blueprint.\n", yamlData["platform"].(string), yamlData["boundary"].(string), yamlData["name"].(string), config.Application.Dc, config.Application.Env)
 														}
 													}
 												}
@@ -300,7 +415,7 @@ func checkUpdateBlueprints(blueprintsFileNames []string, updateBlueprintsFileNam
 		}
 	}
 	if cleanup != "" {
-		fmt.Printf("\n\n#############################\n# Cleanup suggestions %s-%s\n# Update Blueprints\n#############################\n%s\n", config.Application.Dc, config.Application.Env, cleanup)
+		fmt.Printf("\n\n#############################\n# Cleanup suggestions %s-%s\n# Update Blueprints\n#############################\n%s\n#############################\n", config.Application.Dc, config.Application.Env, cleanup)
 	} else {
 		fmt.Printf("\n\n#############################\n# Everything looks clean\n# Update Blueprints\n#############################\n")
 	}
@@ -426,6 +541,21 @@ func checkAzureVMExists(subscription, resourceGroup, vmName string) (bool, error
 	return true, nil
 }
 
+// checkAzureVMExists checks if a virtual machine with the given name exists in Azure using Azure CLI
+func checkAzureVMIP(subscription, resourceGroup, vmName string, ip string) (bool, error) {
+	// Use Azure CLI to check VM existence with specified resource group
+	cmd := exec.Command("az", "vm", "show", "--name", vmName, "--resource-group", resourceGroup, "--subscription", subscription, "-d", "--query", "\"privateIps\"", "--out", "tsv")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return false, fmt.Errorf("error executing Azure CLI command: %v\nOutput: %s", err, output)
+	}
+
+	if strings.Contains(string(output), ip) {
+		return true, nil
+	}
+	return false, nil
+}
+
 // azureLoginIfNeeded logs in to Azure CLI if not already logged in
 func azureLoginIfNeeded(azureCloud string) error {
 	// Azure CLI set cloud
@@ -444,7 +574,7 @@ func azureLoginIfNeeded(azureCloud string) error {
 	}
 
 	// Azure CLI is not logged in, perform login
-	loginCmd := exec.Command("az", "login", "--cloud", azureCloud)
+	loginCmd := exec.Command("az", "login")
 	loginOutput, loginErr := loginCmd.CombinedOutput()
 	if loginErr != nil {
 		return fmt.Errorf("error executing Azure CLI login command: %v\nOutput: %s", loginErr, loginOutput)
