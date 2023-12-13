@@ -267,6 +267,8 @@ func checkBlueprintsIPs(fileNames []string, config *Config) {
 																			fmt.Printf("Number of IP adresses and count match for %s-%s-%s-%s-%s\n", envMap["datacenter"].(string), envMap["environment"].(string), yamlData["platform"].(string), yamlData["boundary"].(string), vmMap["name"].(string))
 
 																			resourceGroup := constructResourceGroupName(envMap, yamlData)
+																			var ip_list []string
+																			var ip_errors bool = false
 																			//Check each IP
 																			for i, vmIP := range vmAddresses {
 																				var fullVmName string
@@ -275,7 +277,10 @@ func checkBlueprintsIPs(fileNames []string, config *Config) {
 																				} else {
 																					fullVmName = constructVMName(envMap, yamlData, vmName.(string), i+1)
 																				}
-																				ipCheck, err := checkAzureVMIP(config.Azure.Subscription, resourceGroup, fullVmName, vmIP.(string))
+																				ipCheck, azIP, err := checkAzureVMIP(config.Azure.Subscription, resourceGroup, fullVmName, vmIP.(string))
+																				if azIP != "" {
+																					ip_list = append(ip_list, azIP)
+																				}
 																				if err != nil {
 																					fmt.Printf("IP for vm %s could not be checked. Check for cleanup blueprint %s-%s-%s\n", fullVmName, yamlData["platform"].(string), yamlData["boundary"].(string), yamlData["name"].(string))
 																					cleanup += fmt.Sprintf("IP for vm %s could not be checked. Check for cleanup blueprint %s-%s-%s in file %s\n", fullVmName, yamlData["platform"].(string), yamlData["boundary"].(string), yamlData["name"].(string), fileName)
@@ -284,6 +289,15 @@ func checkBlueprintsIPs(fileNames []string, config *Config) {
 																				} else {
 																					fmt.Printf("IP for vm %s does not match. Check for cleanup blueprint %s-%s-%s\n", fullVmName, yamlData["platform"].(string), yamlData["boundary"].(string), yamlData["name"].(string))
 																					cleanup += fmt.Sprintf("IP for vm %s does not match. Check for cleanup blueprint %s-%s-%s in file %s\n", fullVmName, yamlData["platform"].(string), yamlData["boundary"].(string), yamlData["name"].(string), fileName)
+																					ip_errors = true
+																				}
+																			}
+																			if len(ip_list) > 0 && ip_errors {
+																				fmt.Printf("Correct IP order for blueprint %s-%s-%s in the dc-env %s-%s is:\n", yamlData["platform"].(string), yamlData["boundary"].(string), yamlData["name"].(string), envMap["datacenter"].(string), envMap["environment"].(string))
+																				cleanup += fmt.Sprintf("Correct IP order for blueprint %s-%s-%s in the dc-env %s-%s is:\n", yamlData["platform"].(string), yamlData["boundary"].(string), yamlData["name"].(string), envMap["datacenter"].(string), envMap["environment"].(string))
+																				for _, ip := range ip_list {
+																					fmt.Printf("- %s", ip)
+																					cleanup += fmt.Sprintf("- %s", ip)
 																				}
 																			}
 																		} else {
@@ -542,18 +556,18 @@ func checkAzureVMExists(subscription, resourceGroup, vmName string) (bool, error
 }
 
 // checkAzureVMExists checks if a virtual machine with the given name exists in Azure using Azure CLI
-func checkAzureVMIP(subscription, resourceGroup, vmName string, ip string) (bool, error) {
+func checkAzureVMIP(subscription, resourceGroup, vmName string, ip string) (bool, string, error) {
 	// Use Azure CLI to check VM existence with specified resource group
 	cmd := exec.Command("az", "vm", "show", "--name", vmName, "--resource-group", resourceGroup, "--subscription", subscription, "-d", "--query", "\"privateIps\"", "--out", "tsv")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return false, fmt.Errorf("error executing Azure CLI command: %v\nOutput: %s", err, output)
+		return false, "", fmt.Errorf("error executing Azure CLI command: %v\nOutput: %s", err, output)
 	}
 
 	if strings.Contains(string(output), ip) {
-		return true, nil
+		return true, string(output), nil
 	}
-	return false, nil
+	return false, string(output), nil
 }
 
 // azureLoginIfNeeded logs in to Azure CLI if not already logged in
